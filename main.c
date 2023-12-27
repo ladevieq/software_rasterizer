@@ -12,9 +12,8 @@ BITMAPINFO bmp_info;
 UINT64 avg = 0U;
 UINT64 avg_fs = 0U;
 UINT64 avg_simd = 0U;
+UINT64 avg_simd_simpl = 0U;
 UINT64 frame_count = 0U;
-__m128i g_zero;
-__m128i g_one;
 
 typedef struct aos_tri {
     UINT32 p1[2];
@@ -160,6 +159,8 @@ void RenderTriangleSIMD(void) {
     __m128i v3_x = _mm_set1_epi32(t.x[0] - t.x[2]);
     __m128i v3_y = _mm_set1_epi32(t.y[0] - t.y[2]);
 
+    __m128i zero = _mm_set1_epi32(-1);
+
     // min and max must be multiples of 2
     for (UINT32 y = min_y; y < max_y + 1; y+=2) {
         UINT32 row_1 = y * g_width;
@@ -251,10 +252,10 @@ void RenderTriangleSIMD(void) {
             __m128i d_t2 = _mm_sub_epi32(d_t2_1, d_t2_2);
             __m128i d_t3 = _mm_sub_epi32(d_t3_1, d_t3_2);
 
-            __m128i t1_gtz = _mm_cmpgt_epi32(d_t1, g_zero);
-            __m128i t2_gtz = _mm_cmpgt_epi32(d_t2, g_zero);
+            __m128i t1_gtz = _mm_cmpgt_epi32(d_t1, zero);
+            __m128i t2_gtz = _mm_cmpgt_epi32(d_t2, zero);
             __m128i t1_and_t2 = _mm_and_si128(t1_gtz, t2_gtz);
-            __m128i t3_gtz = _mm_cmpgt_epi32(d_t3, g_zero);
+            __m128i t3_gtz = _mm_cmpgt_epi32(d_t3, zero);
 
             __m128i all_gtz = _mm_and_si128(t1_and_t2, t3_gtz);
 
@@ -273,6 +274,87 @@ void RenderTriangleSIMD(void) {
     wsprintfA(buffer, "SIMD %u cycles per triangle\n", diff);
     OutputDebugStringA(buffer);
     wsprintfA(buffer, "SIMD %u avg cycles per triangle\n", avg_simd);
+    OutputDebugStringA(buffer);
+}
+
+void RenderTriangleSIMDSimplified(void) {
+    DWORD64 start = __rdtsc();
+
+    UINT64* pixels = (UINT64*)g_pixels;
+    soa_tri t = soa_triangles[0];
+    UINT32 max_x = max(t.x[0], max(t.x[1], t.x[2]));
+    UINT32 min_x = min(t.x[0], min(t.x[1], t.x[2]));
+    UINT32 max_y = max(t.y[0], max(t.y[1], t.y[2]));
+    UINT32 min_y = min(t.y[0], min(t.y[1], t.y[2]));
+
+    // min and max must be multiples of 2
+    max_x += max_x % 2;
+    min_x -= min_x % 2;
+    max_y += max_y % 2;
+    min_y -= min_y % 2;
+
+    __m128i v1v0y = _mm_set1_epi32(t.y[0] - t.y[1]);
+    __m128i v0v1x = _mm_set1_epi32(t.x[1] - t.x[0]);
+
+    __m128i v2v1y = _mm_set1_epi32(t.y[1] - t.y[2]);
+    __m128i v1v2x = _mm_set1_epi32(t.x[2] - t.x[1]);
+
+    __m128i v0v2y = _mm_set1_epi32(t.y[2] - t.y[0]);
+    __m128i v2v0x = _mm_set1_epi32(t.x[0] - t.x[2]);
+
+    __m128i dt1_C = _mm_set1_epi32(t.x[0] * t.y[1] - t.y[0] * t.x[1]);
+    __m128i dt2_C = _mm_set1_epi32(t.x[1] * t.y[2] - t.y[1] * t.x[2]);
+    __m128i dt3_C = _mm_set1_epi32(t.x[2] * t.y[0] - t.y[2] * t.x[0]);
+
+    __m128i zero = _mm_set1_epi32(-1);
+
+    for (UINT32 y = min_y; y < max_y + 1; y += 2) {
+        UINT32 row_1 = y * g_width;
+        UINT32 row_2 = (y + 1) * g_width;
+        for (UINT32 x = min_x; x < max_x + 1; x += 2) {
+
+            __m128i vx = _mm_set_epi32(x + 1, x, x + 1, x);
+            __m128i vy = _mm_set_epi32(y + 1, y + 1, y, y);
+
+            __m128i dt1_A = _mm_mullo_epi32(v1v0y, vx);
+            __m128i dt1_B = _mm_mullo_epi32(v0v1x, vy);
+
+            __m128i dt2_A = _mm_mullo_epi32(v2v1y, vx);
+            __m128i dt2_B = _mm_mullo_epi32(v1v2x, vy);
+
+            __m128i dt3_A = _mm_mullo_epi32(v0v2y, vx);
+            __m128i dt3_B = _mm_mullo_epi32(v2v0x, vy);
+
+            __m128i dt1_1 = _mm_add_epi32(dt1_A, dt1_B);
+            __m128i dt2_1 = _mm_add_epi32(dt2_A, dt2_B);
+            __m128i dt3_1 = _mm_add_epi32(dt3_A, dt3_B);
+
+            __m128i dt1 = _mm_add_epi32(dt1_1, dt1_C);
+            __m128i dt2 = _mm_add_epi32(dt2_1, dt2_C);
+            __m128i dt3 = _mm_add_epi32(dt3_1, dt3_C);
+
+            // __m128i t1_gtz = _mm_cmpgt_epi32(d_t1, zero);
+            // __m128i t2_gtz = _mm_cmpgt_epi32(d_t2, zero);
+            // __m128i t1_and_t2 = _mm_and_si128(t1_gtz, t2_gtz);
+            // __m128i t3_gtz = _mm_cmpgt_epi32(d_t3, zero);
+            __m128i dt1_or_dt2 = _mm_or_si128(dt1, dt2);
+            __m128i or = _mm_or_si128(dt1_or_dt2, dt3);
+            __m128i gtz = _mm_cmpgt_epi32(or, zero);
+
+            pixels[(row_1 + x) / 2] = _mm_extract_epi64(gtz, 0);
+            pixels[(row_2 + x) / 2] = _mm_extract_epi64(gtz, 1);
+        }
+    }
+
+    DWORD64 end = __rdtsc();
+    DWORD64 diff = end - start;
+
+    avg_simd_simpl = ((avg_simd_simpl * frame_count) + diff) / (frame_count + 1);
+
+    char buffer[1024];
+    wsprintfA(buffer, "SIMD simplified %u cycles per triangle\n", diff);
+    OutputDebugStringA(buffer);
+    wsprintfA(buffer, "SIMD simplified %u avg cycles per triangle\n", avg_simd_simpl);
     OutputDebugStringA(buffer);
 }
 
@@ -325,6 +407,7 @@ LRESULT CALLBACK WndProc(HWND window, UINT msg, WPARAM wparam, LPARAM lparam) {
             RenderFullscren();
             RenderTriangle();
             RenderTriangleSIMD();
+            RenderTriangleSIMDSimplified();
             frame_count++;
 
             PAINTSTRUCT paint;
@@ -364,9 +447,6 @@ int mainCRTStartup(void) {
 
     ShowWindow(wnd, SW_SHOW);
 
-    g_zero = _mm_set1_epi32(-1);
-    g_one = _mm_set1_epi32(255);
-
     while(g_is_open) {
         MSG msg;
         while(PeekMessage(&msg, NULL, 0, 0, PM_REMOVE)) {
@@ -377,6 +457,7 @@ int mainCRTStartup(void) {
         RenderFullscren();
         RenderTriangle();
         RenderTriangleSIMD();
+        RenderTriangleSIMDSimplified();
         frame_count++;
     }
 
