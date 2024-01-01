@@ -294,26 +294,21 @@ void RenderTriangleSIMDSimplified(void) {
     max_y += max_y % 2;
     min_y -= min_y % 2;
 
-    INT32 s_v1v0y = t.y[0] - t.y[1];
-    INT32 s_v0v1x = t.x[1] - t.x[0];
-    __m128i v1v0y = _mm_set1_epi32(s_v1v0y);
-    __m128i v0v1x = _mm_set1_epi32(s_v0v1x);
+    __m128i v1v0y = _mm_set1_epi32(t.y[0] - t.y[1]);
+    __m128i v0v1x = _mm_set1_epi32(t.x[1] - t.x[0]);
 
-    INT32 s_v2v1y = t.y[1] - t.y[2];
-    INT32 s_v1v2x = t.x[2] - t.x[1];
-    __m128i v2v1y = _mm_set1_epi32(s_v2v1y);
-    __m128i v1v2x = _mm_set1_epi32(s_v1v2x);
+    __m128i v2v1y = _mm_set1_epi32(t.y[1] - t.y[2]);
+    __m128i v1v2x = _mm_set1_epi32(t.x[2] - t.x[1]);
 
-    INT32 s_v0v2y = t.y[2] - t.y[0];
-    INT32 s_v2v0x = t.x[0] - t.x[2];
-    __m128i v0v2y = _mm_set1_epi32(s_v0v2y);
-    __m128i v2v0x = _mm_set1_epi32(s_v2v0x);
+    __m128i v0v2y = _mm_set1_epi32(t.y[2] - t.y[0]);
+    __m128i v2v0x = _mm_set1_epi32(t.x[0] - t.x[2]);
 
     __m128i dt1_C = _mm_set1_epi32(t.x[0] * t.y[1] - t.y[0] * t.x[1]);
     __m128i dt2_C = _mm_set1_epi32(t.x[1] * t.y[2] - t.y[1] * t.x[2]);
     __m128i dt3_C = _mm_set1_epi32(t.x[2] * t.y[0] - t.y[2] * t.x[0]);
 
     __m128i m_one = _mm_set1_epi32(-1);
+    __m128i two = _mm_set1_epi32(2);
 
     __m128i vx = _mm_set_epi32(min_x + 1, min_x, min_x + 1, min_x);
     __m128i vy = _mm_set_epi32(min_y + 1, min_y + 1, min_y, min_y);
@@ -334,67 +329,37 @@ void RenderTriangleSIMDSimplified(void) {
     __m128i x0_dt2 = _mm_add_epi32(dt2_1, dt2_C);
     __m128i x0_dt3 = _mm_add_epi32(dt3_1, dt3_C);
 
-    __m128i diffx1 = _mm_set_epi32(2 * s_v1v0y, 2 * s_v1v0y, 2 * s_v1v0y, 2 * s_v1v0y);
-    __m128i diffx2 = _mm_set_epi32(2 * s_v2v1y, 2 * s_v2v1y, 2 * s_v2v1y, 2 * s_v2v1y);
-    __m128i diffx3 = _mm_set_epi32(2 * s_v0v2y, 2 * s_v0v2y, 2 * s_v0v2y, 2 * s_v0v2y);
+    __m128i diffx1 = _mm_mullo_epi32(v1v0y, two);
+    __m128i diffx2 = _mm_mullo_epi32(v2v1y, two);
+    __m128i diffx3 = _mm_mullo_epi32(v0v2y,two);
 
-    __m128i diffy1 = _mm_set_epi32(2 * s_v0v1x, 2 * s_v0v1x, 2 * s_v0v1x, 2 * s_v0v1x);
-    __m128i diffy2 = _mm_set_epi32(2 * s_v1v2x, 2 * s_v1v2x, 2 * s_v1v2x, 2 * s_v1v2x);
-    __m128i diffy3 = _mm_set_epi32(2 * s_v2v0x, 2 * s_v2v0x, 2 * s_v2v0x, 2 * s_v2v0x);
+    __m128i diffy1 = _mm_mullo_epi32(v0v1x, two);
+    __m128i diffy2 = _mm_mullo_epi32(v1v2x, two);
+    __m128i diffy3 = _mm_mullo_epi32(v2v0x, two);
 
     for (UINT32 y = min_y; y < max_y + 1; y += 2) {
         UINT32 row_1 = y * g_width;
         UINT32 row_2 = (y + 1) * g_width;
-
-        // __m128i vx = _mm_set_epi32(min_x + 1, min_x, min_x + 1, min_x);
-        // __m128i vy = _mm_set_epi32(y + 1, y + 1, y, y);
-        // __m128i dt1_A = _mm_mullo_epi32(v1v0y, vx);
-        // __m128i dt1_B = _mm_mullo_epi32(v0v1x, vy);
-
-        // __m128i dt2_A = _mm_mullo_epi32(v2v1y, vx);
-        // __m128i dt2_B = _mm_mullo_epi32(v1v2x, vy);
-
-        // __m128i dt3_A = _mm_mullo_epi32(v0v2y, vx);
-        // __m128i dt3_B = _mm_mullo_epi32(v2v0x, vy);
-
-        // __m128i dt1_1 = _mm_add_epi32(dt1_A, dt1_B);
-        // __m128i dt2_1 = _mm_add_epi32(dt2_A, dt2_B);
-        // __m128i dt3_1 = _mm_add_epi32(dt3_A, dt3_B);
-
-        // __m128i dt1 = _mm_add_epi32(dt1_1, dt1_C);
-        // __m128i dt2 = _mm_add_epi32(dt2_1, dt2_C);
-        // __m128i dt3 = _mm_add_epi32(dt3_1, dt3_C);
-
-        // __m128i diff1 = _mm_set_epi32(2 * s_v1v0y, 2 * s_v1v0y, 2 * s_v1v0y, 2 * s_v1v0y);
-        // __m128i diff2 = _mm_set_epi32(2 * s_v2v1y, 2 * s_v2v1y, 2 * s_v2v1y, 2 * s_v2v1y);
-        // __m128i diff3 = _mm_set_epi32(2 * s_v0v2y, 2 * s_v0v2y, 2 * s_v0v2y, 2 * s_v0v2y);
-
-        x0_dt1 = _mm_add_epi32(x0_dt1, diffy1);
-        x0_dt2 = _mm_add_epi32(x0_dt2, diffy2);
-        x0_dt3 = _mm_add_epi32(x0_dt3, diffy3);
         __m128i dt1 = x0_dt1;
         __m128i dt2 = x0_dt2;
         __m128i dt3 = x0_dt3;
 
-        __m128i dt1_or_dt2 = _mm_or_si128(dt1, dt2);
-        __m128i or = _mm_or_si128(dt1_or_dt2, dt3);
-        __m128i gtz = _mm_cmpgt_epi32(or, m_one);
-
-        pixels[row_1 / 2] = _mm_extract_epi64(gtz, 0);
-        pixels[row_2 / 2] = _mm_extract_epi64(gtz, 1);
-
-        for (UINT32 x = min_x + 2; x < max_x + 1; x += 2) {
-            dt1 = _mm_add_epi32(dt1, diffx1);
-            dt2 = _mm_add_epi32(dt2, diffx2);
-            dt3 = _mm_add_epi32(dt3, diffx3);
-
+        for (UINT32 x = min_x; x < max_x + 1; x += 2) {
             __m128i dt1_or_dt2 = _mm_or_si128(dt1, dt2);
             __m128i or = _mm_or_si128(dt1_or_dt2, dt3);
             __m128i gtz = _mm_cmpgt_epi32(or, m_one);
 
             pixels[(row_1 + x) / 2] = _mm_extract_epi64(gtz, 0);
             pixels[(row_2 + x) / 2] = _mm_extract_epi64(gtz, 1);
+
+            dt1 = _mm_add_epi32(dt1, diffx1);
+            dt2 = _mm_add_epi32(dt2, diffx2);
+            dt3 = _mm_add_epi32(dt3, diffx3);
         }
+
+        x0_dt1 = _mm_add_epi32(x0_dt1, diffy1);
+        x0_dt2 = _mm_add_epi32(x0_dt2, diffy2);
+        x0_dt3 = _mm_add_epi32(x0_dt3, diffy3);
     }
 
     DWORD64 end = __rdtsc();
@@ -455,9 +420,9 @@ LRESULT CALLBACK WndProc(HWND window, UINT msg, WPARAM wparam, LPARAM lparam) {
             break;
         }
         case WM_PAINT: {
-            // RenderFullscren();
-            // RenderTriangle();
-            // RenderTriangleSIMD();
+            RenderFullscren();
+            RenderTriangle();
+            RenderTriangleSIMD();
             RenderTriangleSIMDSimplified();
             frame_count++;
 
@@ -505,9 +470,9 @@ int mainCRTStartup(void) {
             DispatchMessage(&msg);
         }
 
-        // RenderFullscren();
-        // RenderTriangle();
-        // RenderTriangleSIMD();
+        RenderFullscren();
+        RenderTriangle();
+        RenderTriangleSIMD();
         RenderTriangleSIMDSimplified();
         frame_count++;
     }
