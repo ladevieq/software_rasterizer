@@ -78,7 +78,8 @@ void RenderFullscren(void) {
     DWORD64 end = __rdtsc();
     DWORD64 diff = end - start;
 
-    avg_fs = ((avg_fs * frame_count) + diff) / (frame_count + 1);
+    avg_fs = (avg_fs + diff) / 2;
+    // avg_fs = ((avg_fs * frame_count) + diff) / (frame_count + 1);
 
     char buffer[1024];
     wsprintfA(buffer, "fullscreen scan %u cycles per triangle\n", diff);
@@ -121,8 +122,8 @@ void RenderTriangle(void) {
     DWORD64 end = __rdtsc();
     DWORD64 diff = end - start;
 
-    // avg = (avg + diff) / 2;
-    avg = ((avg * frame_count) + diff) / (frame_count + 1);
+    avg = (avg + diff) / 2;
+    // avg = ((avg * frame_count) + diff) / (frame_count + 1);
 
     char buffer[1024];
     wsprintfA(buffer, "%u cycles per triangle\n", diff);
@@ -268,8 +269,8 @@ void RenderTriangleSIMD(void) {
     DWORD64 end = __rdtsc();
     DWORD64 diff = end - start;
 
-    // avg_simd = (avg_simd + diff) / 2;
-    avg_simd = ((avg_simd * frame_count) + diff) / (frame_count + 1);
+    avg_simd = (avg_simd + diff) / 2;
+    // avg_simd = ((avg_simd * frame_count) + diff) / (frame_count + 1);
 
     char buffer[1024];
     wsprintfA(buffer, "SIMD %u cycles per triangle\n", diff);
@@ -309,6 +310,7 @@ void RenderTriangleSIMDSimplified(void) {
 
     __m128i m_one = _mm_set1_epi32(-1);
     __m128i two = _mm_set1_epi32(2);
+    __m128i mask = _mm_set_epi32(0x000000ff, 0x000000ff, 0x000000ff, 0x000000ff);
 
     __m128i vx = _mm_set_epi32(min_x + 1, min_x, min_x + 1, min_x);
     __m128i vy = _mm_set_epi32(min_y + 1, min_y + 1, min_y, min_y);
@@ -337,6 +339,9 @@ void RenderTriangleSIMDSimplified(void) {
     __m128i diffy2 = _mm_mullo_epi32(v1v2x, two);
     __m128i diffy3 = _mm_mullo_epi32(v2v0x, two);
 
+    UINT32 area = (t.y[0] - t.y[1]) * t.x[2] + (t.x[1] - t.x[0]) * t.y[2] + (t.x[0] * t.y[1] - t.y[0] * t.x[1]);
+    __m128i v_area = _mm_set1_epi32(0x0fffffff / area);
+
     for (UINT32 y = min_y; y < max_y + 1; y += 2) {
         UINT32 row_1 = y * g_width;
         UINT32 row_2 = (y + 1) * g_width;
@@ -349,8 +354,17 @@ void RenderTriangleSIMDSimplified(void) {
             __m128i or = _mm_or_si128(dt1_or_dt2, dt3);
             __m128i gtz = _mm_cmpgt_epi32(or, m_one);
 
-            pixels[(row_1 + x) / 2] = _mm_extract_epi64(gtz, 0);
-            pixels[(row_2 + x) / 2] = _mm_extract_epi64(gtz, 1);
+            __m128i b1 = _mm_srli_epi32(_mm_mullo_epi32(dt1, v_area), 20);
+            __m128i b2 = _mm_srli_epi32(_mm_mullo_epi32(dt2, v_area), 20);
+            __m128i b3 = _mm_srli_epi32(_mm_mullo_epi32(dt3, v_area), 20);
+
+            __m128i masked_b1 = _mm_and_si128(b1, mask);
+            __m128i masked_b2 = _mm_slli_epi32(_mm_and_si128(b2, mask), 8);
+            __m128i masked_b3 = _mm_slli_epi32(_mm_and_si128(b3, mask), 16);
+            __m128i color = _mm_and_si128(_mm_or_si128(_mm_or_si128(masked_b3, masked_b2), masked_b1), gtz);
+
+            pixels[(row_1 + x) / 2] = _mm_extract_epi64(color, 0);
+            pixels[(row_2 + x) / 2] = _mm_extract_epi64(color, 1);
 
             dt1 = _mm_add_epi32(dt1, diffx1);
             dt2 = _mm_add_epi32(dt2, diffx2);
@@ -365,7 +379,8 @@ void RenderTriangleSIMDSimplified(void) {
     DWORD64 end = __rdtsc();
     DWORD64 diff = end - start;
 
-    avg_simd_simpl = ((avg_simd_simpl * frame_count) + diff) / (frame_count + 1);
+    // avg_simd_simpl = ((avg_simd_simpl * frame_count) + diff) / (frame_count + 1);
+    avg_simd_simpl = (avg_simd_simpl + diff) / 2;
 
     char buffer[1024];
     wsprintfA(buffer, "SIMD simplified %u cycles per triangle\n", diff);
