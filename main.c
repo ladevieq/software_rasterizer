@@ -310,7 +310,7 @@ void RenderTriangleSIMDSimplified(void) {
 
     __m128i m_one = _mm_set1_epi32(-1);
     __m128i two = _mm_set1_epi32(2);
-    __m128i mask = _mm_set_epi32(0x000000ff, 0x000000ff, 0x000000ff, 0x000000ff);
+    __m128i mask = _mm_set1_epi32(0x000000ff);
 
     __m128i vx = _mm_set_epi32(min_x + 1, min_x, min_x + 1, min_x);
     __m128i vy = _mm_set_epi32(min_y + 1, min_y + 1, min_y, min_y);
@@ -340,7 +340,7 @@ void RenderTriangleSIMDSimplified(void) {
     __m128i diffy3 = _mm_mullo_epi32(v2v0x, two);
 
     UINT32 area = (t.y[0] - t.y[1]) * t.x[2] + (t.x[1] - t.x[0]) * t.y[2] + (t.x[0] * t.y[1] - t.y[0] * t.x[1]);
-    __m128i v_area = _mm_set1_epi32(0x0fffffff / area);
+    __m128i v_area = _mm_set1_epi32((0xff << 16) / area);
 
     for (UINT32 y = min_y; y < max_y + 1; y += 2) {
         UINT32 row_1 = y * g_width;
@@ -354,9 +354,9 @@ void RenderTriangleSIMDSimplified(void) {
             __m128i or = _mm_or_si128(dt1_or_dt2, dt3);
             __m128i gtz = _mm_cmpgt_epi32(or, m_one);
 
-            __m128i b1 = _mm_srli_epi32(_mm_mullo_epi32(dt1, v_area), 20);
-            __m128i b2 = _mm_srli_epi32(_mm_mullo_epi32(dt2, v_area), 20);
-            __m128i b3 = _mm_srli_epi32(_mm_mullo_epi32(dt3, v_area), 20);
+            __m128i b1 = _mm_srli_epi32(_mm_mullo_epi32(dt1, v_area), 16);
+            __m128i b2 = _mm_srli_epi32(_mm_mullo_epi32(dt2, v_area), 16);
+            __m128i b3 = _mm_srli_epi32(_mm_mullo_epi32(dt3, v_area), 16);
 
             __m128i masked_b1 = _mm_and_si128(b1, mask);
             __m128i masked_b2 = _mm_slli_epi32(_mm_and_si128(b2, mask), 8);
@@ -379,8 +379,8 @@ void RenderTriangleSIMDSimplified(void) {
     DWORD64 end = __rdtsc();
     DWORD64 diff = end - start;
 
-    // avg_simd_simpl = ((avg_simd_simpl * frame_count) + diff) / (frame_count + 1);
     avg_simd_simpl = (avg_simd_simpl + diff) / 2;
+    // avg_simd_simpl = ((avg_simd_simpl * frame_count) + diff) / (frame_count + 1);
 
     char buffer[1024];
     wsprintfA(buffer, "SIMD simplified %u cycles per triangle\n", diff);
@@ -435,9 +435,9 @@ LRESULT CALLBACK WndProc(HWND window, UINT msg, WPARAM wparam, LPARAM lparam) {
             break;
         }
         case WM_PAINT: {
-            RenderFullscren();
-            RenderTriangle();
-            RenderTriangleSIMD();
+            // RenderFullscren();
+            // RenderTriangle();
+            // RenderTriangleSIMD();
             RenderTriangleSIMDSimplified();
             frame_count++;
 
@@ -485,9 +485,9 @@ int mainCRTStartup(void) {
             DispatchMessage(&msg);
         }
 
-        RenderFullscren();
-        RenderTriangle();
-        RenderTriangleSIMD();
+        // RenderFullscren();
+        // RenderTriangle();
+        // RenderTriangleSIMD();
         RenderTriangleSIMDSimplified();
         frame_count++;
     }
